@@ -37,6 +37,7 @@ parser = argparse.ArgumentParser(description='Run SOAPdenovo2 on paired-end read
 parser.add_argument('--kmer', metavar = 'SIZE', type = int, default = 71, help = 'Kmer size to be used for assembly.')
 parser.add_argument('--kfile', metavar = 'FILE', nargs = '?', default = '', help = 'File for specifying sample specific kmer sizes.')
 parser.add_argument('--execpath', metavar = 'PATH', nargs = '?', default = '', help = 'Directory containing SOAPdenovo2 executables, if they are not in path.')
+parser.add_argument('--resultdir', metavar = 'PATH', nargs = '?', default = '', help = 'Directory containing result files.')
 parser.add_argument('--slurm', action = 'store_true', help = 'Option for specifying if slurm should be used for job submission.')
 args = parser.parse_args()
 
@@ -48,6 +49,13 @@ if args.kfile:
             if match is not None:
                 kmerSizeMap[int(match.group('sample'))] = int(match.group('kmer'))
 
+resultDir = args.resultdir
+if resultDir:
+    if not os.path.exists(resultDir):
+        os.makedirs(resultDir)
+else:
+    resultDir = os.path.abspath(os.path.curdir)
+
 for sample in xrange(1, 25):
     tempName = None
     with tempfile.NamedTemporaryFile(suffix = '.config', delete = False) as temp:
@@ -57,7 +65,7 @@ for sample in xrange(1, 25):
     soapExecutable = 'SOAPdenovo-127mer' if kmerSize > 63 else 'SOAPdenovo-63mer'
     if args.execpath:
       soapExecutable = os.path.join(args.execpath, soapExecutable)
-    soapOptions = [soapExecutable, 'all', '-K', str(kmerSize), '-o', 'assembly_SOAPdenovo2/OB00%02d'%sample, '-s', temp.name]
-    srunOptions = ['srun', '--output', 'OB00%02d.out'%sample, '--error', 'OB00%02d.err'%sample] if args.slurm else []
+    soapOptions = [soapExecutable, 'all', '-K', str(kmerSize), '-o', '%s/OB00%02d'%(resultDir, sample), '-s', temp.name]
+    srunOptions = ['srun', '--output', '%s/OB00%02d.out'%(resultDir, sample), '--error', '%s/OB00%02d.err'%(resultDir, sample)] if args.slurm else []
     print 'Running SOAPdenovo2 for OB00%02d with kmer=%d'%(sample, kmerSize)
     subprocess.call(srunOptions + soapOptions)
