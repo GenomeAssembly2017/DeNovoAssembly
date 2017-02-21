@@ -15,6 +15,7 @@
 
 import glob
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -24,6 +25,7 @@ try:
 except IndexError:
     raise RuntimeError, 'Address of the directory containing FastQ files is required as an argument.'
 
+print 'Sample: best k'
 for num in xrange(1, 25):
     tempName = None
     with tempfile.NamedTemporaryFile(suffix = '.txt', delete = False) as temp:
@@ -33,4 +35,7 @@ for num in xrange(1, 25):
         if fileName is not None:
             tempName = temp.name
     if tempName is not None:
-        subprocess.call(['kmergenie', '-o', 'OB00%02d'%num, tempName])
+        p = subprocess.Popen(['kmergenie', '-o', 'OB00%02d'%num, tempName], stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+        out, err = p.communicate()
+        match = re.search('^best k: (?P<kmer>\d+)', out, re.MULTILINE)
+        print '%d: %s'%(num, match.group('kmer'))
