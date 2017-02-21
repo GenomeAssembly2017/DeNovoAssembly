@@ -11,6 +11,7 @@
 
 import argparse
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -33,19 +34,30 @@ q1={directory}/OB00{sample:02d}_R1_val_1.fq.gz
 q2={directory}/OB00{sample:02d}_R2_val_2.fq.gz
 """
 parser = argparse.ArgumentParser(description='Run SOAPdenovo2 on paired-end reads.')
+parser.add_argument('--kmer', metavar = 'SIZE', type = int, default = 71, help = 'Kmer size to be used for assembly.')
+parser.add_argument('--kfile', metavar = 'FILE', nargs = '?', default = '', help = 'File for specifying sample specific kmer sizes.')
 parser.add_argument('--execpath', metavar = 'PATH', nargs = '?', default = '', help = 'Directory containing SOAPdenovo2 executables, if they are not in path.')
 parser.add_argument('--slurm', action = 'store_true', help = 'Option for specifying if slurm should be used for job submission.')
 args = parser.parse_args()
 
-for num in xrange(1, 25):
+kmerSizeMap = {}
+if args.kfile:
+    with open(args.kfile, 'rb') as f:
+        for line in f:
+            match = re.match('(?P<sample>\d+): (?P<kmer>\d+)', line)
+            if match is not None:
+                kmerSizeMap[int(match.group('sample'))] = int(match.group('kmer'))
+
+for sample in xrange(1, 25):
     tempName = None
     with tempfile.NamedTemporaryFile(suffix = '.config', delete = False) as temp:
-        temp.write(configString.format(directory = os.path.abspath(os.path.curdir), sample = num))
+        temp.write(configString.format(directory = os.path.abspath(os.path.curdir), sample = sample))
         tempName = temp.name
-    kmerSize = 35 if num in (10, 22) else 61 if num == 19 else 71
+    kmerSize = kmerSizeMap.get(sample, args.kmer)
     soapExecutable = 'SOAPdenovo-127mer' if kmerSize > 63 else 'SOAPdenovo-63mer'
     if args.execpath:
       soapExecutable = os.path.join(args.execpath, soapExecutable)
-    soapOptions = [soapExecutable, 'all', '-K', str(kmerSize), '-o', 'assembly_SOAPdenovo2/OB00%02d'%num, '-s', temp.name]
-    srunOptions = ['srun', '--output', 'OB00%02d.out'%num, '--error', 'OB00%02d.err'%num] if args.slurm else []
+    soapOptions = [soapExecutable, 'all', '-K', str(kmerSize), '-o', 'assembly_SOAPdenovo2/OB00%02d'%sample, '-s', temp.name]
+    srunOptions = ['srun', '--output', 'OB00%02d.out'%sample, '--error', 'OB00%02d.err'%sample] if args.slurm else []
+    print 'Running SOAPdenovo2 for OB00%02d with kmer=%d'%(sample, kmerSize)
     subprocess.call(srunOptions + soapOptions)
